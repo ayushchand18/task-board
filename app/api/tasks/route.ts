@@ -3,15 +3,73 @@ import pool from "@/lib/db";
 import { isTaskStatus, validateTitle } from "@/lib/validation";
 import { NewTask, Task } from "@/types/task";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const [rows] = await pool.execute(
-      "SELECT id, title, status, created_at FROM tasks ORDER BY created_at DESC, id DESC"
-    );
+    const { searchParams } = new URL(request.url);
+
+    const status = searchParams.get("status");
+    const limitParam = searchParams.get("limit");
+    const offsetParam = searchParams.get("offset");
+
+    if (status !== null && !isTaskStatus(status)) {
+      return NextResponse.json(
+        { error: "Invalid task status." },
+        { status: 400 }
+      );
+    }
+
+    let limit: number | undefined;
+    let offset: number | undefined;
+
+    if (limitParam !== null) {
+      limit = Number(limitParam);
+
+      if (!Number.isInteger(limit) || limit <= 0) {
+        return NextResponse.json(
+          { error: "Invalid limit." },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (offsetParam !== null) {
+      offset = Number(offsetParam);
+
+      if (!Number.isInteger(offset) || offset < 0) {
+        return NextResponse.json(
+          { error: "Invalid offset." },
+          { status: 400 }
+        );
+      }
+    }
+
+    let query =
+      "SELECT id, title, status, created_at FROM tasks";
+    const values: (string | number)[] = [];
+
+    if (status !== null) {
+      query += " WHERE status = ?";
+      values.push(status);
+    }
+
+    query += " ORDER BY created_at DESC, id DESC";
+
+    if (limit !== undefined) {
+      query += " LIMIT ?";
+      values.push(limit);
+
+      if (offset !== undefined) {
+        query += " OFFSET ?";
+        values.push(offset);
+      }
+    }
+
+    const [rows] = await pool.execute(query, values);
 
     return NextResponse.json(rows as Task[]);
   } catch (error) {
     console.error("GET /api/tasks failed:", error);
+
     return NextResponse.json(
       { error: "Unable to load tasks." },
       { status: 500 }
@@ -22,10 +80,14 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Partial<NewTask>;
+
     const titleError = validateTitle(body.title);
 
     if (titleError) {
-      return NextResponse.json({ error: titleError }, { status: 400 });
+      return NextResponse.json(
+        { error: titleError },
+        { status: 400 }
+      );
     }
 
     const status = body.status ?? "todo";
@@ -54,6 +116,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
     console.error("POST /api/tasks failed:", error);
+
     return NextResponse.json(
       { error: "Unable to create task." },
       { status: 500 }
