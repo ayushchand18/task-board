@@ -1,18 +1,14 @@
 "use client";
-
 import { TaskStatus, TASK_STATUSES } from "@/types/task";
-
 interface TaskFiltersProps {
   value: TaskStatus | "all";
   onChange: (status: TaskStatus | "all") => void;
 }
-
 const statusLabels: Record<TaskStatus, string> = {
   todo: "Todo",
   "in-progress": "In Progress",
   done: "Done",
 };
-
 export default function TaskFilters({
   value,
   onChange,
